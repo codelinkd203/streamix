@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { TMDBService } from '@/components/streaming/TMDBService';
+import { AniListService } from '@/components/streaming/AniListService';
 import ContentRow from '@/components/streaming/ContentRow';
-import { TrendingUp, Film, Tv, Calendar, Flame } from 'lucide-react';
+import { TrendingUp, Film, Tv, Calendar, Flame, Clapperboard } from 'lucide-react';
 
 function PageSkeleton() {
   return (
@@ -35,6 +36,7 @@ export default function NewPopular() {
   const [trendingMovies, setTrendingMovies] = useState([]);
   const [trendingTV, setTrendingTV] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
+  const [trendingAnime, setTrendingAnime] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [myList, setMyList] = useState([]);
 
@@ -46,17 +48,19 @@ export default function NewPopular() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [trendingData, trendingMoviesData, trendingTVData, upcomingData] = await Promise.all([
+        const [trendingData, trendingMoviesData, trendingTVData, upcomingData, trendingAnimeData] = await Promise.all([
           TMDBService.getTrending('all', 'day'),
           TMDBService.getTrending('movie', 'week'),
           TMDBService.getTrending('tv', 'week'),
           TMDBService.getUpcomingMovies(),
+          AniListService.getTrending().catch(() => []),
         ]);
 
         setTrending(trendingData.results);
         setTrendingMovies(trendingMoviesData.results);
         setTrendingTV(trendingTVData.results);
         setUpcoming(upcomingData.results);
+        setTrendingAnime(trendingAnimeData);
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -101,6 +105,7 @@ export default function NewPopular() {
         <ContentRow title="Trending Today" icon={TrendingUp} items={trending} onAddToList={handleAddToList} myList={myList} />
         <ContentRow title="Trending Movies This Week" icon={Film} items={trendingMovies} type="movie" onAddToList={handleAddToList} myList={myList} />
         <ContentRow title="Trending TV Shows This Week" icon={Tv} items={trendingTV} type="tv" onAddToList={handleAddToList} myList={myList} />
+        <ContentRow title="Trending Anime" icon={Clapperboard} items={trendingAnime} type="anime" onAddToList={handleAddToList} myList={myList} />
         <ContentRow title="Coming Soon" icon={Calendar} items={upcoming} type="movie" onAddToList={handleAddToList} myList={myList} />
       </div>
     </div>

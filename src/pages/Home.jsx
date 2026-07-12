@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { TMDBService } from '@/components/streaming/TMDBService';
+import { AniListService } from '@/components/streaming/AniListService';
 import HeroBanner from '@/components/streaming/HeroBanner';
 import ContentRow from '@/components/streaming/ContentRow';
-import { Loader2, PlayCircle, List, TrendingUp, Film, Tv, Star, Clock, Calendar, Radio } from 'lucide-react';
+import { Loader2, PlayCircle, List, TrendingUp, Film, Tv, Star, Clock, Calendar, Radio, Clapperboard } from 'lucide-react';
 import SportsCarousel from '@/components/streaming/SportsCarousel';
 
 export default function Home() {
@@ -14,6 +15,9 @@ export default function Home() {
   const [nowPlaying, setNowPlaying] = useState([]);
   const [upcomingMovies, setUpcomingMovies] = useState([]);
   const [onTheAirTV, setOnTheAirTV] = useState([]);
+  const [trendingAnime, setTrendingAnime] = useState([]);
+  const [popularAnime, setPopularAnime] = useState([]);
+  const [airingAnime, setAiringAnime] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [myList, setMyList] = useState([]);
   const [continueWatching, setContinueWatching] = useState([]);
@@ -41,6 +45,9 @@ export default function Home() {
           nowPlayingData,
           upcomingMoviesData,
           onTheAirTVData,
+          trendingAnimeData,
+          popularAnimeData,
+          airingAnimeData,
         ] = await Promise.all([
           TMDBService.getTrending('all', 'week'),
           TMDBService.getPopularMovies(),
@@ -50,6 +57,9 @@ export default function Home() {
           TMDBService.getNowPlayingMovies(),
           TMDBService.getUpcomingMovies(),
           TMDBService.getOnTheAirTV(),
+          AniListService.getTrending().catch(() => []),
+          AniListService.getPopular().catch(() => []),
+          AniListService.getCurrentlyAiring().catch(() => []),
         ]);
 
         setTrending(trendingData.results);
@@ -57,6 +67,9 @@ export default function Home() {
         setTopRatedMovies(topRatedMoviesData.results);
         setPopularTV(popularTVData.results);
         setTopRatedTV(topRatedTVData.results);
+        setTrendingAnime(trendingAnimeData);
+        setPopularAnime(popularAnimeData);
+        setAiringAnime(airingAnimeData);
         
         // Filter out popular movies from now playing to make it distinct
         const popularIds = new Set(popularMoviesData.results.map(m => m.id));
@@ -159,6 +172,14 @@ export default function Home() {
         />
         <SportsCarousel />
         <ContentRow 
+          title="Trending Anime" 
+          icon={Clapperboard}
+          items={trendingAnime} 
+          type="anime"
+          onAddToList={handleAddToList}
+          myList={myList}
+        />
+        <ContentRow 
           title="Popular Movies" 
           icon={Film}
           items={popularMovies} 
@@ -191,10 +212,26 @@ export default function Home() {
           myList={myList}
         />
         <ContentRow 
+          title="Currently Airing Anime" 
+          icon={Radio}
+          items={airingAnime} 
+          type="anime"
+          onAddToList={handleAddToList}
+          myList={myList}
+        />
+        <ContentRow 
           title="Airing Today" 
           icon={Radio}
           items={onTheAirTV} 
           type="tv"
+          onAddToList={handleAddToList}
+          myList={myList}
+        />
+        <ContentRow 
+          title="Popular Anime" 
+          icon={Clapperboard}
+          items={popularAnime} 
+          type="anime"
           onAddToList={handleAddToList}
           myList={myList}
         />

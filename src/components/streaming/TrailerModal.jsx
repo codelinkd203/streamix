@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TMDBService } from './TMDBService';
+import { AniListService } from './AniListService';
 
 export default function TrailerModal({ isOpen, onClose, mediaId, mediaType }) {
   const [trailerKey, setTrailerKey] = useState(null);
@@ -13,6 +14,17 @@ export default function TrailerModal({ isOpen, onClose, mediaId, mediaType }) {
     const fetchTrailer = async () => {
       setIsLoading(true);
       try {
+        if (mediaType === 'anime') {
+          const data = await AniListService.getAnimeDetails(mediaId);
+          const trailer = data.trailer;
+          if (trailer?.id && trailer.site === 'youtube') {
+            setTrailerKey(trailer.id);
+          } else {
+            setTrailerKey(null);
+          }
+          return;
+        }
+
         const data = mediaType === 'movie' 
           ? await TMDBService.getMovieDetails(mediaId)
           : await TMDBService.getTVDetails(mediaId);

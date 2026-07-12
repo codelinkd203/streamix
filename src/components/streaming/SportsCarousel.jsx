@@ -20,11 +20,11 @@ export default function SportsCarousel() {
   if (matches.length === 0) return null;
 
   return (
-    <div className="group/row relative mx-6">
-      <div className="flex items-center justify-between mb-3 px-1">
+    <div className="group/row relative py-6 max-w-[1600px] mx-auto">
+      <div className="flex items-center justify-between px-4 md:px-8 mb-4">
         <div className="flex items-center gap-2">
-          <Trophy className="w-5 h-5 text-zinc-500" />
-          <h2 className="text-lg md:text-xl font-bold text-white tracking-tight" style={{ letterSpacing: '-0.03em' }}>
+          <Trophy className="w-5 h-5 text-zinc-400" />
+          <h2 className="text-white text-lg font-medium tracking-tight">
             Live Sports
           </h2>
         </div>
@@ -41,9 +41,9 @@ export default function SportsCarousel() {
           <ChevronRight className="w-4 h-4" />
         </button>
 
-        <div ref={scrollRef} className="flex gap-3 overflow-x-auto scrollbar-hide pb-2">
+        <div ref={scrollRef} className="flex gap-4 overflow-x-auto scrollbar-hide px-4 md:px-8 scroll-smooth pb-4">
           {matches.map((match) =>
-          <Link key={match.id} to={`/Sports?match=${match.id}`} className="flex-shrink-0 w-[260px] group/card">
+          <Link key={match.id} to={`/Sports?game=${match.id}`} className="flex-shrink-0 w-[260px] group/card">
               <div className="relative aspect-video rounded-md overflow-hidden bg-zinc-900 border border-zinc-800/60 group-hover/card:border-zinc-600 transition-all">
                 {posterUrl(match.poster) &&
               <img src={posterUrl(match.poster)} alt={match.title} loading="lazy" className="w-full h-full object-cover" onError={(e) => {e.target.style.display = 'none';}} />

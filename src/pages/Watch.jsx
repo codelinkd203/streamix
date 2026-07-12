@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { TMDBService } from '@/components/streaming/TMDBService';
+import { AniListService } from '@/components/streaming/AniListService';
 import VideoPlayer from '@/components/streaming/VideoPlayer';
 import { AlertCircle } from 'lucide-react';
 
@@ -53,6 +54,7 @@ function resolveLangInfo(nativeName) {
 }
 
 function vidlinkCacheKey(tmdbId, type, season, episode) {
+  if (type === 'anime') return `vidlink_adfree_cache_${tmdbId}_anime_${season}_${episode}`; // `season` slot holds SUB/DUB here
   return type === 'tv'
     ? `vidlink_adfree_cache_${tmdbId}_tv_${season}_${episode}`
     : `vidlink_adfree_cache_${tmdbId}_movie`;
@@ -104,6 +106,41 @@ async function fetchVidlinkAdfree(tmdbId, type, season, episode) {
       return await fetchViaCorsProxy();
     }
   }
+}
+
+// Fetch the vidlink-adfree ANIME scrape response (type=anime, e=episode, t=SUB|DUB) — same cors-proxy-first retry pattern
+async function fetchVidlinkAnime(anilistId, episode, audioType) {
+  const url = `${VIDLINK_ADFREE_BASE}/api/scrape?type=anime&id=${anilistId}&e=${episode}&t=${audioType}`;
+
+  const fetchDirect = async () => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  };
+  const fetchViaCorsProxy = async () => {
+    const res = await fetch(`${CORSPROXY_IO}${encodeURIComponent(url)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  };
+
+  try {
+    return await fetchViaCorsProxy();
+  } catch {
+    try {
+      return await fetchDirect();
+    } catch {
+      return await fetchViaCorsProxy();
+    }
+  }
+}
+
+// Anime streams are HLS (m3u8) — those must go through vidlink-adfree's own proxy, not the generic corsproxy
+function wrapAnimeStreamUrl(url) {
+  if (!url) return url;
+  if (url.includes('.m3u8')) {
+    return `${VIDLINK_ADFREE_BASE}/api/proxy?url=${encodeURIComponent(url)}`;
+  }
+  return `${CORSPROXY_IO}${encodeURIComponent(url)}`;
 }
 
 // Extract subtitle list from a vidlink-adfree response
@@ -192,8 +229,24 @@ export default function Watch() {
   const [seasonDetails, setSeasonDetails] = useState(null);
   const [startTime, setStartTime] = useState(0);
   const [posterUrl, setPosterUrl] = useState(null);
+  const [animeStreams, setAnimeStreams] = useState({ sub: null, dub: null });
+  const [audioType, setAudioType] = useState(() => (localStorage.getItem('anime_audio_pref') === 'dub' ? 'dub' : 'sub'));
+  const [showSubDubToggle, setShowSubDubToggle] = useState(true);
 
   const lastSaveRef = useRef(0);
+  const subDubTimeoutRef = useRef(null);
+
+  const resetSubDubTimer = () => {
+    setShowSubDubToggle(true);
+    clearTimeout(subDubTimeoutRef.current);
+    subDubTimeoutRef.current = setTimeout(() => setShowSubDubToggle(false), 3500);
+  };
+
+  useEffect(() => {
+    if (type !== 'anime') return;
+    resetSubDubTimer();
+    return () => clearTimeout(subDubTimeoutRef.current);
+  }, [type]);
 
   // Restore progress
   useEffect(() => {
@@ -210,6 +263,13 @@ export default function Watch() {
     if (!id) return;
     const fetchDetails = async () => {
       try {
+        if (type === 'anime') {
+          const data = await AniListService.getAnimeDetails(id);
+          setDetails(data);
+          if (data?.backdrop_path) setPosterUrl(data.backdrop_path);
+          else if (data?.poster_path) setPosterUrl(data.poster_path);
+          return;
+        }
         const data = type === 'tv'
           ? await TMDBService.getTVDetails(id)
           : await TMDBService.getMovieDetails(id);
@@ -240,13 +300,62 @@ export default function Watch() {
     if (!id) return;
     const run = { aborted: false };
 
-    const playerMode = localStorage.getItem('player_mode') || 'hls';
-
     setIsLoading(true);
     setSources([]);
     setSubtitles([]);
     setError(null);
 
+    if (type === 'anime') {
+      const parseAnimeSource = (data, label) => {
+        const url = parseStreamUrl(data); // throws if malformed
+        return { url: wrapAnimeStreamUrl(url), type: 'hls', provider: { name: label } };
+      };
+
+      const finish = (subData, dubData) => {
+        if (run.aborted) return;
+        const streams = { sub: null, dub: null };
+        let subs = [];
+        try {
+          if (subData) { streams.sub = parseAnimeSource(subData, 'SUB'); subs = parseSubtitles(subData); }
+        } catch { /* SUB unavailable for this episode */ }
+        try {
+          if (dubData) { streams.dub = parseAnimeSource(dubData, 'DUB'); if (subs.length === 0) subs = parseSubtitles(dubData); }
+        } catch { /* DUB unavailable for this episode */ }
+
+        if (!streams.sub && !streams.dub) {
+          setError('No streams found for this episode.');
+          setIsLoading(false);
+          return;
+        }
+
+        setAnimeStreams(streams);
+        setSubtitles(subs);
+        setIsLoading(false);
+      };
+
+      const cachedSub = readVidlinkCache(id, 'anime', 'SUB', selectedEpisode);
+      const cachedDub = readVidlinkCache(id, 'anime', 'DUB', selectedEpisode);
+      if (cachedSub || cachedDub) {
+        finish(cachedSub, cachedDub);
+        return () => { run.aborted = true; };
+      }
+
+      Promise.allSettled([
+        fetchVidlinkAnime(id, selectedEpisode, 'SUB'),
+        fetchVidlinkAnime(id, selectedEpisode, 'DUB'),
+      ]).then(([subRes, dubRes]) => {
+        if (run.aborted) return;
+        const subData = subRes.status === 'fulfilled' ? subRes.value : null;
+        const dubData = dubRes.status === 'fulfilled' ? dubRes.value : null;
+        if (subData) writeVidlinkCache(id, 'anime', 'SUB', selectedEpisode, subData);
+        if (dubData) writeVidlinkCache(id, 'anime', 'DUB', selectedEpisode, dubData);
+        finish(subData, dubData);
+      });
+
+      return () => { run.aborted = true; };
+    }
+
+    const playerMode = localStorage.getItem('player_mode') || 'hls';
     const vidlinkEmbed = buildVidlinkEmbed(id, type, selectedSeason, selectedEpisode);
 
     if (playerMode !== 'hls') {
@@ -260,7 +369,7 @@ export default function Watch() {
       const streamUrl = parseStreamUrl(data); // throws first if data is malformed, before any state is touched
       if (run.aborted) return;
       setSubtitles(parsedSubs);
-      setSources([{ url: `${CORSPROXY_IO}${encodeURIComponent(streamUrl)}`, type: 'mp4' }]);
+      setSources([{ url: streamUrl, type: 'mp4' }]);
       setIsLoading(false);
     };
 
@@ -296,6 +405,19 @@ export default function Watch() {
     return () => { run.aborted = true; };
   }, [id, type, selectedSeason, selectedEpisode]);
 
+  // Anime: reflect the selected SUB/DUB audio track into the generic `sources` state
+  useEffect(() => {
+    if (type !== 'anime') return;
+    const chosen = animeStreams[audioType] || animeStreams.sub || animeStreams.dub;
+    if (chosen) setSources([chosen]);
+  }, [type, animeStreams, audioType]);
+
+  const handleAudioTypeChange = (next) => {
+    setAudioType(next);
+    localStorage.setItem('anime_audio_pref', next);
+    resetSubDubTimer();
+  };
+
   const handleBack = () => navigate(createPageUrl('Details') + `?id=${id}&type=${type}`);
 
   const handleEpisodeSelect = (season, episode) => {
@@ -304,7 +426,17 @@ export default function Watch() {
     window.history.pushState({}, '', createPageUrl('Watch') + `?id=${id}&type=${type}&season=${season}&episode=${episode}`);
   };
 
+  const hasNextEpisodeAnime = () => {
+    const total = details?.episodes;
+    if (!total) return true; // ongoing series with an unknown total — allow trying the next episode
+    return selectedEpisode < total;
+  };
+
   const handleNextEpisode = () => {
+    if (type === 'anime') {
+      if (hasNextEpisodeAnime()) handleEpisodeSelect(1, selectedEpisode + 1);
+      return;
+    }
     if (!seasonDetails?.episodes) return;
     const currentIdx = seasonDetails.episodes.findIndex(e => e.episode_number === selectedEpisode);
     if (currentIdx < seasonDetails.episodes.length - 1) {
@@ -315,6 +447,7 @@ export default function Watch() {
   };
 
   const hasNextEpisode = () => {
+    if (type === 'anime') return hasNextEpisodeAnime();
     if (type !== 'tv' || !seasonDetails?.episodes) return false;
     const currentIdx = seasonDetails.episodes.findIndex(e => e.episode_number === selectedEpisode);
     if (currentIdx < seasonDetails.episodes.length - 1) return true;
@@ -325,6 +458,8 @@ export default function Watch() {
   const currentEpisode = seasonDetails?.episodes?.find(e => e.episode_number === selectedEpisode);
   const displayTitle = type === 'tv' && currentEpisode
     ? `${title} - S${selectedSeason}:E${selectedEpisode} "${currentEpisode.name}"`
+    : type === 'anime'
+    ? `${title} - Episode ${selectedEpisode}`
     : title;
 
   const handleTimeUpdate = (time, duration) => {
@@ -345,7 +480,12 @@ export default function Watch() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black z-50" style={{ fontFamily: "'Geist', sans-serif" }}>
+    <div
+      className="fixed inset-0 bg-black z-50"
+      style={{ fontFamily: "'Geist', sans-serif" }}
+      onMouseMove={type === 'anime' ? resetSubDubTimer : undefined}
+      onTouchStart={type === 'anime' ? resetSubDubTimer : undefined}
+    >
       {/* Full-res blurred backdrop behind everything */}
       {posterUrl && (
         <div
@@ -380,6 +520,26 @@ export default function Watch() {
               <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-white text-black rounded-md hover:bg-zinc-200 transition-colors font-medium">Try Again</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Anime SUB/DUB toggle */}
+      {type === 'anime' && animeStreams.sub && animeStreams.dub && (
+        <div
+          className={`absolute top-4 right-4 z-20 flex items-center gap-1 bg-black/70 border border-zinc-700 rounded-full p-1 backdrop-blur-sm transition-opacity duration-300 ${showSubDubToggle ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        >
+          <button
+            onClick={() => handleAudioTypeChange('sub')}
+            className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${audioType === 'sub' ? 'bg-white text-black' : 'text-zinc-300 hover:text-white'}`}
+          >
+            SUB
+          </button>
+          <button
+            onClick={() => handleAudioTypeChange('dub')}
+            className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${audioType === 'dub' ? 'bg-white text-black' : 'text-zinc-300 hover:text-white'}`}
+          >
+            DUB
+          </button>
         </div>
       )}
 

@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 
 export default function Layout({ children, currentPageName }) {
   const hideNavbar = currentPageName === 'Watch';
+  const showFooter = currentPageName === 'Home';
   
   return (
     <div className="min-h-screen bg-black text-zinc-100 selection:bg-zinc-800 selection:text-white relative" style={{ fontFamily: "'Geist', sans-serif" }}>
@@ -59,6 +60,21 @@ export default function Layout({ children, currentPageName }) {
       <main className={`relative z-10 ${hideNavbar ? '' : ''}`}>
         {children}
       </main>
+
+      {showFooter && (
+        <footer className="relative z-10 border-t border-white/5 px-4 md:px-8 py-8 max-w-[1600px] mx-auto">
+          <p className="text-zinc-500 text-xs leading-relaxed max-w-4xl">
+            Streamix does not host any files on its server. All content is provided by non-affiliated third parties.
+            Streamix is not responsible for the accuracy, compliance, copyright, legality, decency, or any other
+            aspect of the content of other linked sites. If you have any legal issues, please contact the appropriate
+            media file owners or hosters.
+          </p>
+          <p className="text-zinc-600 text-[11px] font-mono mt-3">
+            © {new Date().getFullYear()} Streamix. For personal, non-commercial use only.
+          </p>
+        </footer>
+      )}
+
       <Toaster theme="dark" position="bottom-right" />
     </div>
   );

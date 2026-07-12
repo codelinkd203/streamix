@@ -22,8 +22,8 @@ export default function ContentCard({ item, type, onAddToList, isInList, index, 
     ? `${title} (S${item.season} E${item.episode})`
     : title;
   
-  const posterUrl = item.poster_path 
-    ? `${IMAGE_SIZES.poster.medium}${item.poster_path}`
+  const posterUrl = item.poster_path
+    ? (item.poster_path.startsWith('http') ? item.poster_path : `${IMAGE_SIZES.poster.medium}${item.poster_path}`)
     : null;
 
   const detailUrl = createPageUrl('Details') + `?id=${item.id}&type=${mediaType}`;

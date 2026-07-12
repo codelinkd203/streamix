@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
-import { Search, ChevronDown, Menu, X, Sparkles, Home, Tv, Film, Flame, Trophy } from 'lucide-react';
+import { Search, ChevronDown, Menu, X, Sparkles, Home, Tv, Film, Flame, Trophy, Clapperboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SearchModal from './SearchModal';
 import AIDiscoverModal from './AIDiscoverModal';
@@ -26,6 +26,7 @@ export default function Navbar() {
     { name: 'Home', page: 'Home', icon: Home },
     { name: 'TV Shows', page: 'TVShows', icon: Tv },
     { name: 'Movies', page: 'Movies', icon: Film },
+    { name: 'Anime', page: 'Anime', icon: Clapperboard },
     { name: 'Sports', page: 'Sports', icon: Trophy },
     { name: 'New & Popular', page: 'NewPopular', icon: Flame },
   ];

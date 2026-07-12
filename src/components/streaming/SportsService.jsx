@@ -23,5 +23,5 @@ export function badgeUrl(badge) {
 
 export function posterUrl(poster) {
   if (!poster) return null;
-  return `${BASE_URL}${poster}`;
+  return `${CORS_PROXY}${encodeURIComponent(`${BASE_URL}${poster}`)}`;
 }

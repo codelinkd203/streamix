@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { TMDBService, IMAGE_SIZES } from '@/components/streaming/TMDBService';
 import ContentRow from '@/components/streaming/ContentRow';
+import AnimeDetails from '@/components/streaming/AnimeDetails';
 import { Play, Plus, Check, Star, Calendar, Clock, X, ChevronDown, Users, Film, Info, Building2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Share2 } from 'lucide-react';
@@ -45,11 +46,11 @@ export default function Details() {
       }
     };
 
-    if (id) fetchDetails();
+    if (id && type !== 'anime') fetchDetails();
   }, [id, type]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || type === 'anime') return;
     setLogoUrl(null);
     TMDBService.getImages(id, type).then(data => {
       const logos = data.logos || [];
@@ -122,6 +123,10 @@ export default function Details() {
       description: 'The link has been copied to your clipboard.',
     });
   };
+
+  if (type === 'anime') {
+    return <AnimeDetails id={id} />;
+  }
 
   if (isLoading) {
     return (
