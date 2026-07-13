@@ -456,7 +456,6 @@ export default function VideoPlayer({
           poster={poster}
           playsInline
           onClick={togglePlay}
-          crossOrigin="anonymous"
         >
           {availableCaptions.filter(cap => cap.url).map(cap => (
             <track
